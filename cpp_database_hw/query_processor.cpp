@@ -3,6 +3,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <iostream> 
+#include "utils.h"
+
 
 std::string QueryProcessor::parse_and_execute(Database& db, const std::string& query) {
     std::istringstream stream(query);
@@ -38,16 +40,19 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         }
     }
     else if (command == "INSERT") {
-        std::string temp;
+        std::string temp, table_name, values_def;
         stream >> temp; // TO
         if (temp != "TO") throw std::runtime_error("Syntax error: Expected 'TO' after INSERT.");
 
-        std::string table_name;
         stream >> table_name;
 
-        std::string values_def;
         std::getline(stream, values_def, '(');
         std::getline(stream, values_def, ')');
+        values_def = trim(values_def);
+
+        if (values_def.empty()) {
+            throw std::runtime_error("No values specified for INSERT.");
+        }
 
         std::istringstream values_stream(values_def);
         std::map<std::string, std::any> values;
@@ -55,8 +60,12 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         while (std::getline(values_stream, value, ',')) {
             auto equals_pos = value.find('=');
             if (equals_pos != std::string::npos) {
-                std::string col_name = value.substr(0, equals_pos);
-                std::string col_value = value.substr(equals_pos + 1);
+                std::string col_name = trim(value.substr(0, equals_pos));
+                std::string col_value = trim(value.substr(equals_pos + 1));
+
+                if (col_value.empty()) {
+                    throw std::runtime_error("Empty value for column: " + col_name);
+                }
 
                 if (col_value[0] == '\'') {
                     col_value = col_value.substr(1, col_value.size() - 2);
@@ -92,13 +101,21 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         return "Rows deleted from " + table_name + ".";
     }
     else if (command == "UPDATE") {
-        std::string table_name, temp, condition;
+        std::string table_name, temp, updates_str, condition;
         stream >> table_name >> temp;
         if (temp != "SET") throw std::runtime_error("Syntax error: Expected 'SET'.");
 
-        std::string updates_str;
+        // Чтение строк обновлений до WHERE
         std::getline(stream, updates_str, 'W');
+        if (updates_str.back() == ' ') updates_str.pop_back(); // Удаляем лишний пробел
+
+        // Чтение условия после WHERE
         std::getline(stream, condition);
+        condition = trim(condition); // Убираем пробелы
+
+        if (condition.empty()) {
+            throw std::runtime_error("Missing condition in UPDATE query.");
+        }
 
         std::map<std::string, std::any> updates;
         std::istringstream updates_stream(updates_str);
@@ -106,11 +123,11 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         while (std::getline(updates_stream, update, ',')) {
             auto equals_pos = update.find('=');
             if (equals_pos == std::string::npos) throw std::runtime_error("Syntax error in UPDATE.");
-            std::string col_name = update.substr(0, equals_pos);
-            std::string col_value = update.substr(equals_pos + 1);
+            std::string col_name = trim(update.substr(0, equals_pos));
+            std::string col_value = trim(update.substr(equals_pos + 1));
 
             if (col_value[0] == '\'') {
-                col_value = col_value.substr(1, col_value.size() - 2);
+                col_value = col_value.substr(1, col_value.size() - 2); // Убираем кавычки
                 updates[col_name] = col_value;
             }
             else if (col_value == "true" || col_value == "false") {
@@ -129,14 +146,28 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
     }
     else if (command == "SELECT") {
         std::string columns, temp, table_name, condition;
-        stream >> columns >> temp >> table_name >> temp;
-        std::getline(stream, condition);
+        stream >> columns >> temp >> table_name;
+
+        // Проверка наличия WHERE и чтение условия
+        if (stream >> temp && temp == "WHERE") {
+            std::getline(stream, condition);
+            condition = trim(condition); // Удаление лишних пробелов
+        }
+        else {
+            condition = "true"; // Если WHERE отсутствует, выбираем все строки
+        }
+
+        if (condition.empty()) {
+            throw std::runtime_error("Missing or empty condition in SELECT query.");
+        }
 
         Table* table = db.get_table(table_name);
         if (!table) throw std::runtime_error("Table not found: " + table_name);
 
         auto rows = table->select(condition);
         std::ostringstream result;
+
+        // Форматирование вывода результатов
         for (const auto& row : rows) {
             for (const auto& [col_name, value] : row) {
                 if (value.type() == typeid(std::string)) {
@@ -153,6 +184,8 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         }
         return result.str();
     }
+
+
 
     return "Unknown command.";
 }
