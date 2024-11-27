@@ -134,12 +134,14 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="query_processor.cpp" />
     <ClCompile Include="table.cpp" />
+    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="database.h" />
     <ClInclude Include="index.h" />
     <ClInclude Include="query_processor.h" />
     <ClInclude Include="table.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

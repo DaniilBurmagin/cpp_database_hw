@@ -1,0 +1,8 @@
+3
+id int
+is_admin bool
+name string
+3
+int 1 bool false null
+int 2 bool true null
+int 3 bool false null

@@ -1,0 +1,10 @@
+1
+users
+3
+id int32
+is_admin bool
+name string
+3
+int 1 bool false string Alice
+int 2 bool true string Bob
+int 3 bool false string Charlie

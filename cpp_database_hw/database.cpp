@@ -1,22 +1,36 @@
 #include "database.h"
 #include "query_processor.h"
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
+#include <sstream>
 #include <iostream>
 
 void Database::create_table(const std::string& name, const std::map<std::string, std::string>& schema) {
+    if (tables.find(name) != tables.end()) {
+        throw std::runtime_error("Table already exists: " + name);
+    }
     tables[name] = std::make_shared<Table>(schema);
 }
 
+Table* Database::get_table(const std::string& name) {
+    if (tables.find(name) == tables.end()) {
+        return nullptr;
+    }
+    return tables[name].get();
+}
+
 std::string Database::execute(const std::string& query) {
-    return QueryProcessor::parse_and_execute(*this, query);
+    QueryProcessor processor;
+    return processor.parse_and_execute(*this, query);
 }
 
 void Database::save_to_file(const std::string& filename) const {
     std::ofstream file(filename, std::ios::binary);
-    if (!file) throw std::runtime_error("Cannot open file for saving.");
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file for saving: " + filename);
+    }
 
+    file << tables.size() << "\n";
     for (const auto& [name, table] : tables) {
         file << name << "\n";
         table->save(file);
@@ -25,25 +39,26 @@ void Database::save_to_file(const std::string& filename) const {
 
 void Database::load_from_file(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
-    if (!file) throw std::runtime_error("Cannot open file for loading.");
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file for loading: " + filename);
+    }
 
-    std::string name;
-    while (std::getline(file, name)) {
-        auto table = std::make_unique<Table>();
+    size_t table_count;
+    file >> table_count;
+    file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    tables.clear();
+    for (size_t i = 0; i < table_count; ++i) {
+        std::string name;
+        std::getline(file, name);
+        auto table = std::make_shared<Table>();
         table->load(file);
-        tables[name] = std::move(table);
+        tables[name] = table;
     }
 }
 
-Table* Database::get_table(const std::string& name) const {
-    auto it = tables.find(name);
-    if (it == tables.end()) return nullptr;
-    return it->second.get();
-}
-
 void Database::begin_transaction() {
-    std::map<std::string, std::shared_ptr<Table>> snapshot = tables;
-    transaction_stack.push_back(snapshot);
+    transaction_stack.push_back(tables);
     std::cout << "Transaction started.\n";
 }
 
@@ -63,4 +78,3 @@ void Database::commit_transaction() {
     transaction_stack.pop_back();
     std::cout << "Transaction committed.\n";
 }
-
