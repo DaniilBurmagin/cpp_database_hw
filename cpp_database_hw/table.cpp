@@ -391,6 +391,51 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_conditi
     std::cout << "Parsing condition: " << condition << "\n";
     std::string trimmed_condition = trim(condition);
 
+    // Условие "true" или "false" означает, что оно всегда истинно/ложно
+    if (trimmed_condition == "true") {
+        return [](const std::map<std::string, std::any>&) { return true; };
+    }
+    if (trimmed_condition == "false") {
+        return [](const std::map<std::string, std::any>&) { return false; };
+    }
+
+    // Обработка логических операторов AND и OR
+    if (trimmed_condition.find(" AND ") != std::string::npos) {
+        size_t pos = trimmed_condition.find(" AND ");
+        std::string left = trimmed_condition.substr(0, pos);
+        std::string right = trimmed_condition.substr(pos + 5);
+        return [this, left, right](const std::map<std::string, std::any>& row) {
+            return parse_condition(left)(row) && parse_condition(right)(row);
+            };
+    }
+    if (trimmed_condition.find(" OR ") != std::string::npos) {
+        size_t pos = trimmed_condition.find(" OR ");
+        std::string left = trimmed_condition.substr(0, pos);
+        std::string right = trimmed_condition.substr(pos + 4);
+        return [this, left, right](const std::map<std::string, std::any>& row) {
+            return parse_condition(left)(row) || parse_condition(right)(row);
+            };
+    }
+
+    // Обработка NOT
+    if (trimmed_condition.find("NOT ") == 0) {
+        std::string inner = trimmed_condition.substr(4);
+        return [this, inner](const std::map<std::string, std::any>& row) {
+            return !parse_condition(inner)(row);
+            };
+    }
+
+    // Простое условие (например, "name='Alice'")
+    return parse_simple_condition(trimmed_condition);
+}
+
+
+
+
+std::function<bool(const std::map<std::string, std::any>&)> Table::parse_condition(const std::string& condition) const {
+    std::cout << "Parsing condition: " << condition << "\n";
+    std::string trimmed_condition = trim(condition);
+
     if (trimmed_condition == "true") {
         return [](const std::map<std::string, std::any>&) { return true; };
     }
@@ -427,7 +472,7 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_conditi
     if (col_value.empty()) {
         throw std::runtime_error("Empty value in condition: " + condition);
     }
-
+    col_value.erase(col_value.find_last_not_of(" \t") + 1);
     if (col_value == "true" || col_value == "false") {
         bool bool_value = (col_value == "true");
         return [col_name, bool_value](const std::map<std::string, std::any>& row) {
@@ -439,8 +484,8 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_conditi
                 throw std::runtime_error("Type mismatch for column '" + col_name + "', expected bool.");
             }
             return std::any_cast<bool>(it->second) == bool_value;
-            };
-    }
+            return !row.at(col_name).has_value();
+            return !row.at(col_name).has_value();
 
     if (col_value[0] == '\'' && col_value.back() == '\'') {
         std::string str_value = col_value.substr(1, col_value.size() - 2);
@@ -467,19 +512,19 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_conditi
                 throw std::runtime_error("Type mismatch for column '" + col_name + "', expected int.");
             }
             return std::any_cast<int>(it->second) == int_value;
-            };
-    }
+            return row.at(col_name).type() == typeid(int) && std::any_cast<int>(row.at(col_name)) == int_value;
+            return row.at(col_name).type() == typeid(int) && std::any_cast<int>(row.at(col_name)) == int_value;
 
     throw std::runtime_error("Unsupported value format in condition: " + condition);
 }
-
+}
 
 std::function<bool(const std::map<std::string, std::any>&)> Table::parse_simple_condition(const std::string& condition) const {
     auto equals_pos = condition.find('=');
     if (equals_pos == std::string::npos) {
         throw std::runtime_error("Syntax error in condition: " + condition);
     }
-
+    }
     std::string col_name = trim(condition.substr(0, equals_pos));
     std::string col_value = trim(condition.substr(equals_pos + 1));
 
@@ -521,7 +566,7 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_simple_
             return std::any_cast<bool>(it->second) == bool_value;
             };
     }
-
+        }
     // Обработка целочисленных значений
     try {
         if (!is_numeric(col_value)) {
@@ -543,6 +588,11 @@ std::function<bool(const std::map<std::string, std::any>&)> Table::parse_simple_
 }
 
 
+        };
+        };
+        };
+        };
+        };
 
 
 

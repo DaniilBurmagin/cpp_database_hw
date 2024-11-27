@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "utils.h"
 
+
 std::string QueryProcessor::parse_and_execute(Database& db, const std::string& query) {
     std::istringstream stream(query);
     std::string command;
@@ -234,6 +235,8 @@ std::string QueryProcessor::parse_and_execute(Database& db, const std::string& q
         }
         return result.str();
     }
+
+
 
     return "Unknown command.";
 }
